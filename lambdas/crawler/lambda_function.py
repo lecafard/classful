@@ -7,8 +7,9 @@ import re
 import gzip
 
 BUCKET = "classful-data-testing"
-FILENAME = "classutil.json.gz"
+KEY = "classutil.json.gz"
 TABLE = "classful-testing-pending"
+
 CLASS_REGEX = r'^(\d{4}[STU][123])_([A-Z]{4}\d{4})_(\d{1,5})$'
 
 s3 = boto3.resource("s3")
@@ -20,18 +21,18 @@ def lambda_handler(event, context):
     #return send_notifications({})
 
     last_updated = 0
-    obj = s3.Object(BUCKET, FILENAME)
+    obj = s3.Object(BUCKET, KEY)
     try:
         current_data = json.loads(gzip.decompress(obj.get()["Body"].read()))
         last_updated = current_data["correct_at"]
     except botocore.exceptions.ClientError as e:
         if e.response["ResponseMetadata"]["HTTPStatusCode"] == 404:
-            print("File {} does not currently exist in bucket {}, will create.".format(FILENAME, BUCKET))
+            print("File {} does not currently exist in bucket {}, will create.".format(KEY, BUCKET))
         else:
             raise e
     except json.JSONDecodeError as e:
         # attempt to delete
-        print("Invalid json in file {}, deleting".format(FILENAME))
+        print("Invalid json in file {}, deleting".format(KEY))
         obj.delete()
 
     res = scrape(concurrency=8, last_updated=last_updated)
@@ -86,7 +87,6 @@ def get_section_if_not_full(class_id, data):
 def send_notifications(data):
     # grab all from dynamodb
     # todo: in the unlikely event there is over 1MB of data in the row
-    #       we need to do something about it
     try:
         res = dynamo.Table(TABLE).scan()
     except botocore.exceptions.ClientError as e:
@@ -94,8 +94,7 @@ def send_notifications(data):
         raise e
 
     for i in res['Items']:
-        # check preconditions
-        section = get_section_if_not_full(i['class'])
+        section = get_section_if_not_full(i['class'], data)
         if not section:
             continue
 
