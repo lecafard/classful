@@ -13,6 +13,7 @@
     "bulma": "^0.8.2",
     "react": "^16.13.1",
     "react-dom": "^16.13.1",
+    "react-google-recaptcha": "^2.0.1",
     "react-scripts": "3.4.1",
     "typescript": "~3.7.2",
     "wretch": "^1.7.2"
@@ -38,7 +39,9 @@
       "last 1 safari version"
     ]
   },
+  "proxy": "https://qsvevnwj45.execute-api.ap-southeast-2.amazonaws.com/dev",
   "devDependencies": {
+    "@types/react-google-recaptcha": "^1.1.2",
     "node-sass": "^4.14.1"
   }
 }

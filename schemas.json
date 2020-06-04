@@ -1,14 +1,15 @@
 {
     "$schema": "http://json-schema.org/schema#",
     "type": "object",
-    "required": ["classes", "email"],
+    "required": ["sections", "email", "captcha"],
     "properties": {
         "email": {"type": "string", "format": "email"},
-        "classes": {
+        "sections": {
             "type": "array",
             "items": {
                 "type": "string"
             }
-        }
+        },
+        "captcha": {"type": "string"}
     }
 }

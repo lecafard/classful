@@ -10,16 +10,13 @@ BUCKET = "classful-data-testing"
 KEY = "classutil.json.gz"
 TABLE = "classful-testing-pending"
 
-CLASS_REGEX = r'^(\d{4}[STU][123])_([A-Z]{4}\d{4})_(\d{1,5})$'
+CLASS_REGEX = r"^(\d{4}[STU][123])_([A-Z]{4}\d{4})_(\d{1,5})$"
 
 s3 = boto3.resource("s3")
 dynamo = boto3.resource("dynamodb")
 ses = boto3.client("ses")
 
 def lambda_handler(event, context):
-    #stub
-    #return send_notifications({})
-
     last_updated = 0
     obj = s3.Object(BUCKET, KEY)
     try:
@@ -49,17 +46,17 @@ def lambda_handler(event, context):
 
 def convert_to_indexed(data):
     courses = {}
-    for i in data['courses']:
-        session = '{}{}'.format(i['year'], i['term'])
+    for i in data["courses"]:
+        session = "{}{}".format(i["year"], i["term"])
         if session not in courses:
             courses[session] = {}
-        courses[session][i['code']] = {
-            'name': i['name'],
-            'components': {str(j['id']): {k: j[k] for k in j if k != 'id'} for j in i['components']}
+        courses[session][i["code"]] = {
+            "name": i["name"],
+            "components": {str(j["id"]): {k: j[k] for k in j if k != "id"} for j in i["components"]}
         }
     return {
-        'correct_at': data['correct_at'],
-        'courses': courses
+        "correct_at": data["correct_at"],
+        "courses": courses
     }
 
 def get_section_if_not_full(class_id, data):
@@ -79,7 +76,7 @@ def get_section_if_not_full(class_id, data):
     component = data["courses"][session_id][course_id]["components"][component_id]
 
     if component["filled"] < component["maximum"] and component["status"].startswith("Open"):
-        return i
+        return {"full_id": class_id, **component}
     
     return False
 
@@ -93,31 +90,51 @@ def send_notifications(data):
         print("Error with retrieving records from dynamodb")
         raise e
 
-    for i in res['Items']:
-        section = get_section_if_not_full(i['class'], data)
-        if not section:
-            continue
+    # for each user
+    # send email once we check preconditions
+    for i in res["Items"]:
+        found = []
+        remain = []
+        for s in i["sections"].split(","):
+            section = get_section_if_not_full(s, data)
+            if section:
+                found.append(section)
+            else:
+                remain.append(s)
 
-        # send email once we check preconditions
-        ses.send_email(
-            Source='noreply@classful.tomn.me',
-            Destination={
-                'ToAddresses': [i['email']]
-            },
-            Message={
-                'Subject': {
-                    'Data': 'Classful - A spot has opened up for {}!'.format(i['class'])
+        if len(found) > 0:
+            ses.send_email(
+                Source="Classful <noreply@classful.tomn.me>",
+                Destination={
+                    "ToAddresses": [i["email"]]
                 },
-                'Body': {
-                    'Text': {
-                        'Data': '{} - {} {} is now open. Enrol quickly before someone takes it away from you.'.format(i['class'], section['cmp_type'], section['section'])
+                Message={
+                    "Subject": {
+                        "Data": "Classful - A spot has opened up!"
+                    },
+                    "Body": {
+                        "Text": {
+                            "Data": "Hi,\n" + 
+                                "{}\n\nare now open. ".format("\n".join("\t{} - {} {}".format(i["full_id"], i["cmp_type"], i["times"]) for i in found)) +
+                                "Enrol quickly before someone else does."
+                        }
                     }
                 }
-            }
-        )
-        # delete record as we have notified them
-        res = dynamo.Table(TABLE).delete_item(
-            Key={
-                'id': i['id']
-            }
-        )
+            )
+
+        if len(remain) > 0:
+            dynamo.Table(TABLE).update_item(
+                Key={
+                    "id": i["id"],
+                },
+                UpdateExpression="SET sections = :value",
+                ExpressionAttributeValues={
+                    ":value": ",".join(remain)
+                }
+            )
+        else:
+            dynamo.Table(TABLE).delete_item(
+                Key={
+                    "id": i["id"]
+                }
+            )

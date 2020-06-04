@@ -2,9 +2,10 @@ import boto3
 import json
 import gzip
 from httplib import send_response, send_error
-from classutil import get_classutil, validate_class
+from classutil import get_classutil, validate_section
 from lambdarest import lambda_handler
 from db import add_to_db
+import recaptcha
 
 MAX_COURSES = 6
 
@@ -30,14 +31,18 @@ def get_course_by_term(event, term, course):
 def submit_notification(event):
     body = json.loads(event["body"])
     data = get_classutil()
-    # todo: add recaptcha
     
-    if len(body["classes"]) > MAX_COURSES:
-        return send_error("TooManyClasses", 400)
-    for i in body["classes"]:
-        if not validate_class(data, i):
-            return send_error("InvalidClass", 400)
+    captcha = body["captcha"]
+    ip = event["requestContext"]["identity"]["sourceIp"]
+    if not recaptcha.verify(captcha, ip):
+        return send_error("CaptchaFailed", 400)
+    
+    if len(body["sections"]) > MAX_COURSES:
+        return send_error("TooManySections", 400)
+    for i in body["sections"]:
+        if not validate_section(data, i):
+            return send_error("InvalidSection", 400)
     
     # commit to dynamodb
-    add_to_db(body["email"], body["classes"])
+    add_to_db(body["email"], body["sections"])
     return send_response(True)

@@ -1,1 +1,78 @@
-@import "bulma/bulma.sass";
+@import "bulma/sass/utilities/_all.sass";
+@import "bulma/sass/base/_all.sass";
+@import "bulma/sass/form/_all.sass";
+@import "bulma/sass/elements/button.sass";
+@import "bulma/sass/elements/container.sass";
+@import "bulma/sass/elements/notification.sass";
+@import "bulma/sass/elements/other.sass";
+@import "bulma/sass/elements/table.sass";
+@import "bulma/sass/elements/title.sass";
+
+body, html {
+    height: 100%;
+}
+
+#root {
+    height: 100%;
+}
+
+#app {
+    min-height: 100%;
+    padding-bottom: 150px;
+}
+
+footer {
+    display: flex;
+    align-items: center;
+    background-color: #1a1a1a;
+    height: 100px;
+    color: white;
+}
+
+footer p {
+    width: 100%;
+    text-align: center;
+}
+
+.navbar {
+    background-color: #24a3dd;
+    height: 100px;
+    margin-bottom: 50px;
+    text-align: center;
+}
+
+.navbar .brand {
+    color: white;
+    font-size: 30pt;
+    line-height: 100px;
+}
+
+.navbar .brand:hover {
+    color: white;
+}
+
+#tbl-sections tr.selected {
+    background-color: lightgreen;
+}
+
+.selected-session {
+    color: $link;
+}
+
+.selected-session:hover {
+    color: $link-hover;
+}
+
+
+#tbl-sections tbody tr:not(.selected):hover {
+    background-color: aliceblue;
+}
+
+#tbl-sections tbody tr.selected:hover {
+    background-color: greenyellow;
+}
+
+.recaptcha {
+    display: inline-block;
+    margin: 0 auto;
+}

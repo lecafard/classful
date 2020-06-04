@@ -3,10 +3,11 @@ import boto3
 import json
 import gzip
 import re
+import os
 
 # reload classutil
 CACHE_TIME = 900
-BUCKET = "classful-data-testing"
+BUCKET = os.getenv("CLASSUTIL_BUCKET", "classful-data-testing")
 FILENAME = "classutil.json.gz"
 CLASS_REGEX = re.compile(r'^(\d{4}[STU][123])_([A-Z]{4}\d{4})_(\d{1,5})$')
 
@@ -25,7 +26,7 @@ def get_classutil():
         classutil_expires = int(time()) + CACHE_TIME
     return classutil_data
 
-def validate_class(data, class_id):
+def validate_section(data, class_id):
     match = CLASS_REGEX.match(class_id)
     if not match:
         return False
