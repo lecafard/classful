@@ -4,13 +4,15 @@ from classutil import scrape
 import json
 from time import time
 import re
+import os
 import gzip
 
-BUCKET = "classful-data-testing"
 KEY = "classutil.json.gz"
-TABLE = "classful-testing-pending"
-
 CLASS_REGEX = r"^(\d{4}[STU][123])_([A-Z]{4}\d{4})_(\d{1,5})$"
+
+BUCKET = os.getenv("CLASSUTIL_BUCKET", "classful-data-testing")
+TABLE = os.getenv("DYNAMODB_TABLE", "classful-testing-pending")
+EMAIL = os.getenv("EMAIL", "noreply@classful.tomn.me")
 
 s3 = boto3.resource("s3")
 dynamo = boto3.resource("dynamodb")
@@ -104,7 +106,7 @@ def send_notifications(data):
 
         if len(found) > 0:
             ses.send_email(
-                Source="Classful <noreply@classful.tomn.me>",
+                Source="Classful <{}>".format(EMAIL),
                 Destination={
                     "ToAddresses": [i["email"]]
                 },

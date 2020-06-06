@@ -1,0 +1,310 @@
+Parameters: 
+  ParamDomainName:
+    Type: String
+    Default: classful.tomn.me
+    Description: Root domain name
+  ParamRecaptchaSecret:
+    Type: String
+    Default: 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
+    Description: Recaptcha private key. Default is testing key.
+Resources:
+  S3Classutil:
+    Type: AWS::S3::Bucket
+  DynamoData:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TimeToLiveSpecification:
+        AttributeName: expires
+        Enabled: True
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+  IAMLambdaAPI:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: S3ReadOnly
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Join ["/", [!GetAtt S3Classutil.Arn, "*"]]
+        - PolicyName: DynamoReadWrite
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt DynamoData.Arn
+  IAMLambdaCrawler:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: CloudwatchLogging
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+        - PolicyName: S3ReadWrite
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Join ["/", [!GetAtt S3Classutil.Arn, "*"]]
+                  - !GetAtt S3Classutil.Arn
+        - PolicyName: DynamoReadWrite
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt DynamoData.Arn
+        - PolicyName: SESSendmail
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    ses:FromAddress: !Join ["@", [noreply, !Ref ParamDomainName]]
+  LambdaAPI:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Lambda API handler
+      Runtime: python3.8
+      MemorySize: 256
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt IAMLambdaAPI.Arn
+      Code: build/lambda.api/
+      Environment:
+        Variables:
+          CLASSUTIL_BUCKET: !Ref S3Classutil
+          DYNAMODB_TABLE: !Ref DynamoData
+          ALLOWED_ORIGIN: !Join ["", [https://, !Ref ParamDomainName]]
+          RECAPTCHA_SECRET: !Ref ParamRecaptchaSecret
+  LambdaCrawler:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Lambda crawler and notifier
+      Runtime: python3.6
+      MemorySize: 768
+      Role: !GetAtt IAMLambdaCrawler.Arn
+      Handler: lambda_function.lambda_handler
+      Code: build/lambda.crawler/
+      Timeout: 240
+      Environment:
+        Variables:
+          CLASSUTIL_BUCKET: !Ref S3Classutil
+          DYNAMODB_TABLE: !Ref DynamoData
+          EMAIL_ADDRESS: !Join ["@", [noreply, !Ref ParamDomainName]]
+  CronCrawler:
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: Hourly scanner
+      ScheduleExpression: cron(10 * * * ? *)
+      Targets:
+        - Arn: !GetAtt LambdaCrawler.Arn
+          Id: !Ref LambdaCrawler
+  ApiGatewayIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ''
+            Effect: 'Allow'
+            Principal:
+              Service:
+                - 'apigateway.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: '/'
+      Policies:
+        - PolicyName: LambdaAPI
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt LambdaAPI.Arn
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: "Classful API"
+      Description: "Entry point for application"
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+  ApiBodyRequestValidator:
+    Type: AWS::ApiGateway::RequestValidator
+    Properties: 
+      RestApiId: !Ref ApiGateway
+      ValidateRequestBody: True
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: [ ApiMethodTermsGet, ApiMethodTermCoursesGet, ApiMethodCourseComponentsGet, ApiMethodSubmitPost, ApiMethodSubmitOptions ]
+    Properties:
+      RestApiId: !Ref ApiGateway
+      StageName: "v1"
+  ApiResourceSubmit:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: 'submit'
+      RestApiId: !Ref ApiGateway
+  ApiModelSubmit:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      ContentType: application/json
+      Description: submission model
+      RestApiId: !Ref ApiGateway
+      Schema: |
+        {
+            "$schema": "http://json-schema.org/schema#",
+            "type": "object",
+            "required": ["sections", "email", "captcha"],
+            "properties": {
+                "email": {"type": "string", "format": "email"},
+                "sections": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "captcha": {"type": "string"}
+            }
+        }
+  ApiResourceTerms:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: 'terms'
+      RestApiId: !Ref ApiGateway
+  ApiResourceTermCourses:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiResourceTerms
+      PathPart: '{term_id}'
+      RestApiId: !Ref ApiGateway
+  ApiResourceCourseComponents:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiResourceTermCourses
+      PathPart: '{course_id}'
+      RestApiId: !Ref ApiGateway
+  ApiMethodTermsGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ApiResourceTerms
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaAPI.Arn}/invocations'
+      OperationName: lambda
+  ApiMethodTermCoursesGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ApiResourceTermCourses
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaAPI.Arn}/invocations'
+      OperationName: lambda
+  ApiMethodCourseComponentsGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ApiResourceCourseComponents
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaAPI.Arn}/invocations'
+      OperationName: lambda
+  ApiMethodSubmitPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ApiResourceSubmit
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaAPI.Arn}/invocations'
+      OperationName: lambda
+      RequestModels:
+        application/json: !Ref ApiModelSubmit
+      RequestValidatorId: !Ref ApiBodyRequestValidator
+Outputs:
+  ApiGateway:
+    Description: API Gateway URL
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/v1"
