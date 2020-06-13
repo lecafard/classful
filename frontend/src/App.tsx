@@ -159,6 +159,7 @@ function App() {
             <tr>
               <th>Code</th>
               <th>Type</th>
+              <th>Status</th>
               <th>Capacity</th>
               <th>Times</th>
             </tr>
@@ -172,6 +173,7 @@ function App() {
               >
                 <td>{c}</td>
                 <td>{componentData[c].cmp_type}</td>
+                <td>{componentData[c].status}</td>
                 <td>{componentData[c].filled}/{componentData[c].maximum}</td>
                 <td>{componentData[c].times}</td>
               </tr>
