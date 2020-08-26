@@ -100,6 +100,11 @@ function App() {
       .then(() => {
         setSelectedSections([]);
         setEmail("");
+        setNotification({
+          color: "success",
+          message: "Success! We will keep your details for 14 days and will notify you if a class becomes available.",
+          open: true,
+        });
       }).catch(data => {
         setNotification({
           color: "danger",

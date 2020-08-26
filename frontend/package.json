@@ -39,7 +39,7 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "https://qsvevnwj45.execute-api.ap-southeast-2.amazonaws.com/dev",
+  "proxy": "https://rin367ospa.execute-api.ap-southeast-2.amazonaws.com/v1",
   "devDependencies": {
     "@types/react-google-recaptcha": "^1.1.2",
     "node-sass": "^4.14.1"

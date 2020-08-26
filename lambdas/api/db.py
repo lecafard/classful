@@ -4,7 +4,7 @@ from time import time
 import os
 
 TABLE = os.getenv("DYNAMODB_TABLE", "classful-testing-pending")
-EXPIRES = 86400 * 8
+EXPIRES = 86400 * 15
 
 dynamo = boto3.resource('dynamodb')
 
