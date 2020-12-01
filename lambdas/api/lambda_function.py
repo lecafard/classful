@@ -9,6 +9,9 @@ import recaptcha
 
 MAX_COURSES = 6
 
+# do the get here to save some billing
+get_classutil()
+
 @lambda_handler.handle("get", path="/terms")
 def get_terms(event):
     return send_response(list(get_classutil()['courses'].keys()))

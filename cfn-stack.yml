@@ -42,6 +42,17 @@ Resources:
             Action:
               - sts:AssumeRole
       Policies:
+        - PolicyName: CloudwatchLogging
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
         - PolicyName: S3ReadOnly
           PolicyDocument:
             Version: 2012-10-17
@@ -128,6 +139,34 @@ Resources:
                 Condition:
                   StringEquals:
                     ses:FromAddress: !Ref ParamFromAddress
+  IAMLambdaCleaner:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: CloudwatchLogging
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DeleteLogStream
+                  - logs:DeleteLogGroup
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
   LambdaAPI:
     Type: AWS::Lambda::Function
     Properties:
@@ -158,6 +197,19 @@ Resources:
           CLASSUTIL_BUCKET: !Ref S3Classutil
           DYNAMODB_TABLE: !Ref DynamoData
           EMAIL: !Ref ParamFromAddress
+  LambdaCleaner:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Lambda cleaner
+      Runtime: python3.6
+      MemorySize: 512
+      Role: !GetAtt IAMLambdaCleaner.Arn
+      Handler: lambda_function.lambda_handler
+      Code: build/lambda.cleaner/
+      Timeout: 600
+      Environment:
+        Variables:
+          STACK_NAME: !Ref AWS::StackName
   CronCrawler:
     Type: AWS::Events::Rule
     Properties: 
@@ -166,6 +218,14 @@ Resources:
       Targets:
         - Arn: !GetAtt LambdaCrawler.Arn
           Id: !Ref LambdaCrawler
+  CronCleaner:
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: Monthly cleaner that deletes the previous month of events
+      ScheduleExpression: cron(0 1 1 * ? *)
+      Targets:
+        - Arn: !GetAtt LambdaCleaner.Arn
+          Id: !Ref LambdaCleaner
   ApiGatewayIamRole:
     Type: AWS::IAM::Role
     Properties:
