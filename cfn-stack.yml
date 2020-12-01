@@ -226,6 +226,20 @@ Resources:
       Targets:
         - Arn: !GetAtt LambdaCleaner.Arn
           Id: !Ref LambdaCleaner
+  LambdaPermissionCrawler:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaCrawler.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CronCrawler.Arn
+  LambdaPermissionCleaner:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaCleaner.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CronCleaner.Arn
   ApiGatewayIamRole:
     Type: AWS::IAM::Role
     Properties:
