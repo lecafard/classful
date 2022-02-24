@@ -9,6 +9,7 @@ import gzip
 
 KEY = "classutil.json.gz"
 CLASS_REGEX = r"^(\d{4}[STU][123])_([A-Z]{4}\d{4})_(\d{1,5})$"
+META_CLASSUTIL_CORRECT_AT = "classutil_correct_at"
 
 BUCKET = os.getenv("CLASSUTIL_BUCKET", "classful-data-testing")
 TABLE = os.getenv("DYNAMODB_TABLE", "classful-testing-pending")
@@ -22,16 +23,16 @@ def lambda_handler(event, context):
     last_updated = 0
     obj = s3.Object(BUCKET, KEY)
     try:
-        current_data = json.loads(gzip.decompress(obj.get()["Body"].read()))
-        last_updated = current_data["correct_at"]
+        obj.load()
+        last_updated = int(obj.metadata.get(META_CLASSUTIL_CORRECT_AT, "0"))
     except botocore.exceptions.ClientError as e:
         if e.response["ResponseMetadata"]["HTTPStatusCode"] == 404:
             print("File {} does not currently exist in bucket {}, will create.".format(KEY, BUCKET))
         else:
             raise e
-    except json.JSONDecodeError as e:
+    except ValueError as e:
         # attempt to delete
-        print("Invalid json in file {}, deleting".format(KEY))
+        print(f"Invalid {META_CLASSUTIL_CORRECT_AT} metadata for object {KEY}, deleting")
         obj.delete()
 
     res = scrape(concurrency=8, last_updated=last_updated)
@@ -39,7 +40,10 @@ def lambda_handler(event, context):
     
     if res["correct_at"] != last_updated:
         obj.put(
-            Body=gzip.compress(json.dumps(data).encode("utf-8"), compresslevel=9)
+            Body=gzip.compress(json.dumps(data).encode("utf-8"), compresslevel=9),
+            Metadata={
+                META_CLASSUTIL_CORRECT_AT: str(data["correct_at"])
+            }
         )
         if last_updated != 0:
             send_notifications(data)
