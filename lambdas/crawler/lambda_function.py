@@ -6,10 +6,14 @@ from time import time
 import re
 import os
 import gzip
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 KEY = "classutil.json.gz"
 CLASS_REGEX = r"^(\d{4}[STU][123])_([A-Z]{4}\d{4})_(\d{1,5})$"
 META_CLASSUTIL_CORRECT_AT = "classutil_correct_at"
+CONCURRENCY = 8
 
 BUCKET = os.getenv("CLASSUTIL_BUCKET", "classful-data-testing")
 TABLE = os.getenv("DYNAMODB_TABLE", "classful-testing-pending")
@@ -35,10 +39,9 @@ def lambda_handler(event, context):
         print(f"Invalid {META_CLASSUTIL_CORRECT_AT} metadata for object {KEY}, deleting")
         obj.delete()
 
-    res = scrape(concurrency=8, last_updated=last_updated)
-    data = convert_to_indexed(res)
+    data = scrape(concurrency=CONCURRENCY, last_updated=last_updated)
     
-    if res["correct_at"] != last_updated:
+    if data["correct_at"] != last_updated:
         obj.put(
             Body=gzip.compress(json.dumps(data).encode("utf-8"), compresslevel=9),
             Metadata={
@@ -46,7 +49,7 @@ def lambda_handler(event, context):
             }
         )
         if last_updated != 0:
-            send_notifications(data)
+            send_notifications(convert_to_indexed(data))
     else:
         print("Not updated, current version: {}".format(last_updated))
 

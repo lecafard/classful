@@ -19,9 +19,9 @@ def get_terms(event):
 @lambda_handler.handle("get", path="/terms/<string:term>")
 def get_courses_by_term(event, term):
     data = get_classutil()
-    if term not in data['courses']:
+    if term not in data['course_names']:
         return send_error("NotFound", 404)
-    return send_response({i: data['courses'][term][i]['name'] for i in data['courses'][term]})
+    return send_response(data['course_names'][term])
 
 @lambda_handler.handle("get", path="/terms/<string:term>/<string:course>")
 def get_course_by_term(event, term, course):

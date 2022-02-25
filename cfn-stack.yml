@@ -178,8 +178,10 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Description: Lambda API handler
-      Runtime: python3.6
+      Runtime: python3.8
       MemorySize: 256
+      Architectures:
+        - arm64
       Handler: lambda_function.lambda_handler
       Role: !GetAtt IAMLambdaAPI.Arn
       Code: build/lambda.api/
@@ -193,8 +195,10 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Description: Lambda crawler and notifier
-      Runtime: python3.6
+      Runtime: python3.8
       MemorySize: 768
+      Architectures:
+        - arm64
       Role: !GetAtt IAMLambdaCrawler.Arn
       Handler: lambda_function.lambda_handler
       Code: build/lambda.crawler/
@@ -208,8 +212,10 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Description: Lambda cleaner
-      Runtime: python3.6
+      Runtime: python3.8
       MemorySize: 512
+      Architectures:
+        - arm64
       Role: !GetAtt IAMLambdaCleaner.Arn
       Handler: lambda_function.lambda_handler
       Code: build/lambda.cleaner/
